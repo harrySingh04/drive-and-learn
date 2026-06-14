@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#0a0c10" />
+<title>Drive &amp; Learn — System Design Tutor</title>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --panel: #12161f;
+    --panel-2: #181d28;
+    --line: #232a38;
+    --text: #e8ecf4;
+    --muted: #8b93a7;
+    --indigo: #6366f1;
+    --indigo-2: #818cf8;
+    --green: #34d399;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  .hidden { display: none !important; }
+
+  /* Setup screen */
+  #setup {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    gap: 18px;
+    text-align: center;
+  }
+  #setup h1 { font-size: 26px; margin: 0; letter-spacing: -0.5px; }
+  #setup p { color: var(--muted); margin: 0; max-width: 340px; line-height: 1.5; }
+  #setup input {
+    width: 100%;
+    max-width: 360px;
+    padding: 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 16px;
+    outline: none;
+  }
+  #setup input:focus { border-color: var(--indigo); }
+  .primary {
+    background: var(--indigo);
+    color: #fff;
+    border: none;
+    padding: 16px 28px;
+    border-radius: var(--radius);
+    font-size: 16px;
+    font-weight: 600;
+    width: 100%;
+    max-width: 360px;
+  }
+  .primary:active { background: var(--indigo-2); }
+
+  /* App shell */
+  #app { flex: 1; display: flex; flex-direction: column; }
+  header {
+    padding: 16px 18px 10px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .topbar { display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-weight: 700; font-size: 16px; letter-spacing: -0.3px; }
+  .brand small { color: var(--indigo-2); font-weight: 600; }
+  .gear { background: none; border: none; color: var(--muted); font-size: 18px; padding: 4px 8px; }
+  .progresswrap { margin-top: 12px; }
+  .progressbar { height: 8px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+  .progressfill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--indigo), var(--indigo-2)); transition: width .4s ease; }
+  .progresslabel { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  main { flex: 1; padding: 18px; overflow-y: auto; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+  }
+  .eyebrow { color: var(--indigo-2); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .topic-title { font-size: 22px; font-weight: 700; margin: 8px 0 6px; letter-spacing: -0.4px; }
+  .topic-sub { color: var(--muted); line-height: 1.5; font-size: 15px; }
+
+  .answer {
+    margin-top: 16px;
+    background: var(--panel-2);
+    border-radius: var(--radius);
+    padding: 16px;
+    line-height: 1.6;
+    font-size: 16px;
+    white-space: pre-wrap;
+    min-height: 24px;
+  }
+  .answer .meta { color: var(--muted); font-size: 12px; margin-top: 12px; }
+
+  .row { display: flex; gap: 10px; margin-top: 16px; }
+  .btn {
+    flex: 1;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .btn:active { border-color: var(--indigo); }
+  .btn.accent { background: var(--indigo); border-color: var(--indigo); color: #fff; }
+  .btn.ghost { background: transparent; }
+
+  .mic {
+    width: 84px; height: 84px; border-radius: 50%;
+    border: none; color: #fff; font-size: 30px;
+    background: var(--indigo);
+    box-shadow: 0 8px 30px rgba(99,102,241,.45);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto;
+  }
+  .mic.listening { animation: pulse 1.2s infinite; background: #ef4444; box-shadow: 0 8px 30px rgba(239,68,68,.5); }
+  @keyframes pulse { 0%{transform:scale(1)} 50%{transform:scale(1.08)} 100%{transform:scale(1)} }
+  .miccenter { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 22px; }
+  .micstatus { color: var(--muted); font-size: 13px; min-height: 16px; text-align: center; }
+
+  .hintbar {
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.6;
+  }
+  .hintbar b { color: var(--indigo-2); font-weight: 600; }
+
+  .qinput {
+    width: 100%;
+    padding: 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 16px;
+    outline: none;
+  }
+  .qinput:focus { border-color: var(--indigo); }
+
+  /* Topics list */
+  .topiclist { display: flex; flex-direction: column; gap: 10px; }
+  .topicrow {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 14px;
+  }
+  .topicrow.active { border-color: var(--indigo); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--line); flex: none; }
+  .dot.completed { background: var(--green); }
+  .dot.in_progress { background: var(--indigo-2); }
+  .topicrow .tt { font-weight: 600; font-size: 15px; }
+  .topicrow .tc { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .topicrow .meta { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+  /* Bottom nav */
+  nav {
+    display: flex; border-top: 1px solid var(--line);
+    background: var(--panel);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav button {
+    flex: 1; background: none; border: none; color: var(--muted);
+    padding: 14px 6px; font-size: 12px; font-weight: 600;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  nav button .ico { font-size: 20px; }
+  nav button.active { color: var(--indigo-2); }
+
+  .loading { color: var(--muted); font-style: italic; }
+  .err { color: #f87171; font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<!-- ===== Setup ===== -->
+<section id="setup">
+  <h1>Drive &amp; Learn</h1>
+  <p>System design tutor for your commute. Enter your Cloudflare Worker URL to begin.</p>
+  <input id="workerUrl" type="url" inputmode="url" autocomplete="off" autocapitalize="off"
+         placeholder="https://drive-and-learn.xyz.workers.dev" />
+  <button class="primary" id="saveUrl">Start learning</button>
+  <div class="err hidden" id="setupErr"></div>
+</section>
+
+<!-- ===== App ===== -->
+<section id="app" class="hidden">
+  <header>
+    <div class="topbar">
+      <div class="brand">Drive&nbsp;&amp;&nbsp;Learn <small>· system design</small></div>
+      <button class="gear" id="gear" title="Change worker URL">⚙</button>
+    </div>
+    <div class="progresswrap">
+      <div class="progressbar"><div class="progressfill" id="progressfill"></div></div>
+      <div class="progresslabel" id="progresslabel">0 of 0 topics complete</div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Learn mode -->
+    <div id="view-learn">
+      <div class="card">
+        <div class="eyebrow" id="learnEyebrow">Current topic</div>
+        <div class="topic-title" id="learnTitle">Loading…</div>
+        <div class="topic-sub" id="learnSub"></div>
+      </div>
+
+      <div class="answer hidden" id="learnAnswer"></div>
+
+      <div class="row">
+        <button class="btn accent" id="explainBtn">🔊 Explain this</button>
+        <button class="btn" id="nextBtn">Next ▸</button>
+      </div>
+
+      <div class="miccenter">
+        <button class="mic" id="learnMic">🎤</button>
+        <div class="micstatus" id="learnMicStatus">Tap and ask anything</div>
+      </div>
+
+      <div class="hintbar">
+        Try saying: <b>explain this</b> · <b>brief summary</b> · <b>podcast mode</b> · <b>what should I study today</b>
+      </div>
+    </div>
+
+    <!-- Q&A mode -->
+    <div id="view-qa" class="hidden">
+      <div class="card">
+        <div class="eyebrow">Ask anything</div>
+        <div class="topic-sub" style="margin-top:8px">Type or speak a question about any system design concept.</div>
+      </div>
+
+      <div style="margin-top:14px; display:flex; gap:10px;">
+        <input class="qinput" id="qaInput" placeholder="e.g. brief summary of CAP theorem" />
+        <button class="btn accent" style="flex:none; width:64px;" id="qaSend">Ask</button>
+      </div>
+
+      <div class="answer hidden" id="qaAnswer"></div>
+
+      <div class="miccenter">
+        <button class="mic" id="qaMic">🎤</button>
+        <div class="micstatus" id="qaMicStatus">Tap to speak your question</div>
+      </div>
+
+      <div class="hintbar">
+        Try saying: <b>explain this</b> · <b>brief summary</b> · <b>podcast mode</b> · <b>what should I study today</b>
+      </div>
+    </div>
+
+    <!-- Topics mode -->
+    <div id="view-topics" class="hidden">
+      <div class="topiclist" id="topicList"></div>
+    </div>
+  </main>
+
+  <nav>
+    <button data-view="learn" class="active" id="nav-learn"><span class="ico">📚</span>Learn</button>
+    <button data-view="qa" id="nav-qa"><span class="ico">💬</span>Q&amp;A</button>
+    <button data-view="topics" id="nav-topics"><span class="ico">🗂</span>Topics</button>
+  </nav>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  var LS_URL = "dl_worker_url";
+  var state = { workerUrl: "", topics: [], currentIndex: 0, view: "learn" };
+
+  // ---- DOM helpers ----
+  function $(id) { return document.getElementById(id); }
+  function show(el) { el.classList.remove("hidden"); }
+  function hide(el) { el.classList.add("hidden"); }
+
+  // ---- Speech (TTS) ----
+  function speak(text) {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.0; u.pitch = 1.0;
+    window.speechSynthesis.speak(u);
+  }
+  function stopSpeaking() {
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }
+
+  // ---- Speech recognition ----
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function listen(onResult, onState) {
+    if (!SR) { onState && onState("Voice not supported on this browser"); return; }
+    var rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onstart = function () { onState && onState("listening"); };
+    rec.onerror = function (e) { onState && onState("Mic error: " + e.error); };
+    rec.onend = function () { onState && onState("idle"); };
+    rec.onresult = function (e) {
+      var t = e.results[0][0].transcript;
+      onResult(t);
+    };
+    try { rec.start(); } catch (err) { onState && onState("Mic busy"); }
+    return rec;
+  }
+
+  // ---- API ----
+  function api(path, opts) {
+    return fetch(state.workerUrl.replace(/\/$/, "") + path, opts).then(function (r) {
+      return r.json();
+    });
+  }
+  function postJSON(path, body) {
+    return api(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  // ---- Progress bar ----
+  function renderProgress() {
+    var total = state.topics.length;
+    var done = state.topics.filter(function (t) { return t.status === "completed"; }).length;
+    var pct = total ? Math.round((done / total) * 100) : 0;
+    $("progressfill").style.width = pct + "%";
+    $("progresslabel").textContent = done + " of " + total + " topics complete";
+  }
+
+  // ---- Learn view ----
+  function currentTopic() { return state.topics[state.currentIndex]; }
+
+  function renderLearn() {
+    var t = currentTopic();
+    if (!t) {
+      $("learnTitle").textContent = "No topics loaded";
+      $("learnSub").textContent = "";
+      return;
+    }
+    $("learnEyebrow").textContent = t.category + " · difficulty " + (t.difficulty || 2);
+    $("learnTitle").textContent = t.title;
+    $("learnSub").textContent = t.subtitle || "";
+    hide($("learnAnswer"));
+  }
+
+  function explainCurrent(styleHint) {
+    var t = currentTopic();
+    if (!t) return;
+    var q = (styleHint ? styleHint + " " : "") + "Explain " + t.title;
+    askAnswer(q, $("learnAnswer"), $("learnMicStatus"));
+  }
+
+  // ---- Shared answer flow ----
+  function askAnswer(query, answerEl, statusEl) {
+    // Local intent shortcuts that don't need the model
+    var lower = query.toLowerCase();
+    if (/\bnext topic\b/.test(lower)) { nextTopic(); return; }
+
+    show(answerEl);
+    answerEl.innerHTML = '<span class="loading">Thinking…</span>';
+    if (statusEl) statusEl.textContent = "";
+
+    postJSON("/answer", { query: query, topic_id: currentTopic() ? currentTopic().id : null })
+      .then(function (data) {
+        if (data.error) {
+          answerEl.innerHTML = '<span class="err">' + data.error + "</span>";
+          return;
+        }
+        var text = data.answer || "(no answer)";
+        var meta = data.intent ? '<div class="meta">mode: ' + data.intent + "</div>" : "";
+        answerEl.innerHTML = escapeHtml(text) + meta;
+        speak(text);
+      })
+      .catch(function (e) {
+        answerEl.innerHTML = '<span class="err">Request failed: ' + escapeHtml(String(e)) + "</span>";
+      });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c];
+    });
+  }
+
+  // ---- Voice intent routing (UI level) ----
+  function routeVoice(transcript, answerEl, statusEl) {
+    var lower = transcript.toLowerCase();
+    if (/\bnext topic\b/.test(lower)) { nextTopic(); speak("Next topic"); return; }
+    if (/study plan|what should i study/.test(lower)) { runStudyPlan(answerEl); return; }
+    askAnswer(transcript, answerEl, statusEl);
+  }
+
+  function runStudyPlan(answerEl) {
+    show(answerEl);
+    answerEl.innerHTML = '<span class="loading">Building your study plan…</span>';
+    postJSON("/plan", {}).then(function (data) {
+      var text = data.plan || data.answer || "(no plan)";
+      answerEl.innerHTML = escapeHtml(text);
+      speak(text);
+    }).catch(function (e) {
+      answerEl.innerHTML = '<span class="err">Plan failed: ' + escapeHtml(String(e)) + "</span>";
+    });
+  }
+
+  // ---- Next topic / progress ----
+  function nextTopic() {
+    var t = currentTopic();
+    if (!t) return;
+    postJSON("/progress", { topic_id: t.id, status: "completed" })
+      .then(function () {
+        t.status = "completed";
+        renderProgress();
+        if (state.currentIndex < state.topics.length - 1) {
+          state.currentIndex++;
+        }
+        renderLearn();
+        renderTopics();
+      })
+      .catch(function () {
+        // even if the call fails, advance locally so the drive continues
+        if (state.currentIndex < state.topics.length - 1) state.currentIndex++;
+        renderLearn();
+      });
+  }
+
+  // ---- Topics view ----
+  function renderTopics() {
+    var list = $("topicList");
+    list.innerHTML = "";
+    state.topics.forEach(function (t, i) {
+      var row = document.createElement("div");
+      row.className = "topicrow" + (i === state.currentIndex ? " active" : "");
+      row.innerHTML =
+        '<span class="dot ' + (t.status || "not_started") + '"></span>' +
+        '<div><div class="tt">' + escapeHtml(t.title) + "</div>" +
+        '<div class="tc">' + escapeHtml(t.category) + "</div></div>" +
+        '<span class="meta">' + (t.status === "completed" ? "✓ done" : t.status === "in_progress" ? "in progress" : "") + "</span>";
+      row.addEventListener("click", function () {
+        state.currentIndex = i;
+        setView("learn");
+        renderLearn();
+      });
+      list.appendChild(row);
+    });
+  }
+
+  // ---- Views ----
+  function setView(view) {
+    state.view = view;
+    ["learn", "qa", "topics"].forEach(function (v) {
+      $("view-" + v).classList.toggle("hidden", v !== view);
+      $("nav-" + v).classList.toggle("active", v === view);
+    });
+    stopSpeaking();
+  }
+
+  // ---- Load curriculum ----
+  function loadTopics() {
+    return api("/topics", {}).then(function (data) {
+      state.topics = (data.topics || []).slice();
+      // resume at first not-completed topic
+      var idx = state.topics.findIndex(function (t) { return t.status !== "completed"; });
+      state.currentIndex = idx >= 0 ? idx : 0;
+      renderProgress();
+      renderLearn();
+      renderTopics();
+    });
+  }
+
+  // ---- Wiring ----
+  function startApp() {
+    hide($("setup"));
+    show($("app"));
+    $("learnTitle").textContent = "Loading curriculum…";
+    loadTopics().catch(function (e) {
+      $("learnTitle").textContent = "Could not reach worker";
+      $("learnSub").innerHTML = '<span class="err">' + escapeHtml(String(e)) + "</span>";
+    });
+  }
+
+  function saveUrl() {
+    var v = $("workerUrl").value.trim();
+    if (!/^https?:\/\//.test(v)) {
+      var err = $("setupErr"); err.textContent = "Enter a valid http(s) URL."; show(err);
+      return;
+    }
+    state.workerUrl = v;
+    localStorage.setItem(LS_URL, v);
+    startApp();
+  }
+
+  function bind() {
+    $("saveUrl").addEventListener("click", saveUrl);
+    $("workerUrl").addEventListener("keydown", function (e) { if (e.key === "Enter") saveUrl(); });
+
+    $("gear").addEventListener("click", function () {
+      stopSpeaking();
+      hide($("app")); show($("setup"));
+      $("workerUrl").value = state.workerUrl;
+    });
+
+    $("explainBtn").addEventListener("click", function () { explainCurrent(""); });
+    $("nextBtn").addEventListener("click", nextTopic);
+
+    $("learnMic").addEventListener("click", function () {
+      var btn = this, status = $("learnMicStatus");
+      btn.classList.add("listening");
+      listen(
+        function (t) { status.textContent = "“" + t + "”"; routeVoice(t, $("learnAnswer"), status); },
+        function (s) {
+          if (s === "listening") status.textContent = "Listening…";
+          else { btn.classList.remove("listening"); if (s && s !== "idle") status.textContent = s; }
+        }
+      );
+    });
+
+    $("qaSend").addEventListener("click", function () {
+      var q = $("qaInput").value.trim();
+      if (q) routeVoice(q, $("qaAnswer"), $("qaMicStatus"));
+    });
+    $("qaInput").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { var q = this.value.trim(); if (q) routeVoice(q, $("qaAnswer"), $("qaMicStatus")); }
+    });
+
+    $("qaMic").addEventListener("click", function () {
+      var btn = this, status = $("qaMicStatus");
+      btn.classList.add("listening");
+      listen(
+        function (t) { $("qaInput").value = t; status.textContent = "“" + t + "”"; routeVoice(t, $("qaAnswer"), status); },
+        function (s) {
+          if (s === "listening") status.textContent = "Listening…";
+          else { btn.classList.remove("listening"); if (s && s !== "idle") status.textContent = s; }
+        }
+      );
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll("nav button"), function (b) {
+      b.addEventListener("click", function () { setView(b.getAttribute("data-view")); });
+    });
+  }
+
+  // ---- Init ----
+  function init() {
+    bind();
+    var saved = localStorage.getItem(LS_URL);
+    if (saved) {
+      state.workerUrl = saved;
+      $("workerUrl").value = saved;
+      startApp();
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
