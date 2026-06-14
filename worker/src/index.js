@@ -19,11 +19,32 @@ function json(data, status = 200) {
 }
 
 // ---- Neon HTTP API ---------------------------------------------------------
-// POST to NEON_URL with { query, params }. Returns parsed rows.
+// Neon's SQL-over-HTTP endpoint lives at https://<host>/sql and authenticates
+// via the `Neon-Connection-String` header. NEON_URL should be the full Postgres
+// connection string (postgresql://user:pass@host/db) that Neon gives you; we
+// derive the /sql endpoint from its host. If NEON_URL is already an https .../sql
+// URL, set NEON_CONNECTION_STRING separately to carry auth.
+// Body is { query, params }; response is { rows: [...] }.
+function neonEndpoint(env) {
+  const conn = env.NEON_URL || "";
+  const headers = { "Content-Type": "application/json" };
+  if (/^postgres(ql)?:\/\//i.test(conn)) {
+    const u = new URL(conn);
+    headers["Neon-Connection-String"] = conn;
+    return { endpoint: `https://${u.hostname}/sql`, headers };
+  }
+  // Already an HTTP(S) endpoint; auth must come from a separate secret.
+  if (env.NEON_CONNECTION_STRING) {
+    headers["Neon-Connection-String"] = env.NEON_CONNECTION_STRING;
+  }
+  return { endpoint: conn, headers };
+}
+
 async function sql(env, query, params = []) {
-  const res = await fetch(env.NEON_URL, {
+  const { endpoint, headers } = neonEndpoint(env);
+  const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ query, params }),
   });
   if (!res.ok) {
