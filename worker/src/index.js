@@ -1,5 +1,5 @@
 // drive-and-learn Cloudflare Worker
-// Endpoints: GET /topics, POST /search, POST /answer, POST /plan, POST /progress
+// Endpoints: GET /topics, POST /search, POST /answer, POST /plan, POST /progress, POST /speak
 // Env: OPENAI_API_KEY, GEMINI_API_KEY, NEON_URL (Neon HTTP API URL)
 
 const CORS = {
@@ -10,6 +10,11 @@ const CORS = {
 
 const EMBED_MODEL = "text-embedding-3-small";
 const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts";
+
+// Podcast host names — must match the speaker labels the model is told to use.
+const PODCAST_HOSTS = { a: "Alex", b: "Sam" };
+const VOICES = { single: "Kore", podcastA: "Kore", podcastB: "Puck" };
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -100,6 +105,84 @@ async function gemini(env, prompt) {
   return parts.map((p) => p.text || "").join("").trim();
 }
 
+// ---- Gemini text-to-speech -------------------------------------------------
+// Returns raw PCM (24kHz, 16-bit, mono) as a Uint8Array. `multi` switches to a
+// two-host (Alex/Sam) voice config for podcast scripts.
+async function geminiTTS(env, text, multi) {
+  const speechConfig = multi
+    ? {
+        multiSpeakerVoiceConfig: {
+          speakerVoiceConfigs: [
+            {
+              speaker: PODCAST_HOSTS.a,
+              voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICES.podcastA } },
+            },
+            {
+              speaker: PODCAST_HOSTS.b,
+              voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICES.podcastB } },
+            },
+          ],
+        },
+      }
+    : {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICES.single } },
+      };
+
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TTS_MODEL}:generateContent?key=` +
+    env.GEMINI_API_KEY;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text }] }],
+      generationConfig: { responseModalities: ["AUDIO"], speechConfig },
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Gemini TTS failed (${res.status}): ${t}`);
+  }
+  const data = await res.json();
+  const b64 = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!b64) throw new Error("Gemini TTS returned no audio");
+  return base64ToBytes(b64);
+}
+
+function base64ToBytes(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+// Wrap raw PCM in a 44-byte WAV header so browsers can play it directly.
+function pcmToWav(pcm, sampleRate = 24000, channels = 1, bitsPerSample = 16) {
+  const blockAlign = (channels * bitsPerSample) / 8;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = pcm.length;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  const writeStr = (off, s) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true); // PCM chunk size
+  view.setUint16(20, 1, true); // audio format = PCM
+  view.setUint16(22, channels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeStr(36, "data");
+  view.setUint32(40, dataSize, true);
+  new Uint8Array(buffer, 44).set(pcm);
+  return new Uint8Array(buffer);
+}
+
 // ---- Semantic search -------------------------------------------------------
 async function searchChunks(env, query, matchCount = 5) {
   const embedding = await embed(env, query);
@@ -140,7 +223,11 @@ const STYLE_PROMPTS = {
   deep:
     "Give a clear, well-structured spoken explanation that takes about 1-2 minutes to read aloud. Use plain language suitable for hands-free listening while driving. Avoid markdown, code blocks, or bullet symbols.",
   podcast:
-    "Deliver an engaging ~5 minute podcast-style deep dive, conversational and narrative. Walk through the concept, why it matters, real-world examples, and trade-offs. Plain spoken prose only, no markdown.",
+    `Write this as an engaging ~5 minute two-host podcast dialogue between ${PODCAST_HOSTS.a} and ${PODCAST_HOSTS.b}. ` +
+    `${PODCAST_HOSTS.a} is the curious co-host asking sharp questions; ${PODCAST_HOSTS.b} is the expert who explains clearly. ` +
+    `Cover what the concept is, why it matters, real-world examples, and trade-offs. ` +
+    `Prefix every line of dialogue with the speaker's name and a colon, exactly like "${PODCAST_HOSTS.a}:" or "${PODCAST_HOSTS.b}:". ` +
+    `Alternate naturally between the two. No markdown, no stage directions, just the spoken lines.`,
 };
 
 // ---- Build an adaptive 7-day study plan ------------------------------------
@@ -283,6 +370,20 @@ async function handleProgress(env, body) {
   return json({ progress: rows[0] || null });
 }
 
+// High-quality speech: turn answer text into WAV audio via Gemini TTS.
+// mode === "podcast" uses two-host multi-speaker voices; everything else is
+// a single natural voice. Returns binary audio/wav.
+async function handleSpeak(env, body) {
+  const text = (body.text || "").trim();
+  if (!text) return json({ error: "text is required" }, 400);
+  const multi = body.mode === "podcast";
+  const pcm = await geminiTTS(env, text, multi);
+  const wav = pcmToWav(pcm);
+  return new Response(wav, {
+    headers: { "Content-Type": "audio/wav", "Cache-Control": "no-store", ...CORS },
+  });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -308,6 +409,8 @@ export default {
             return await handlePlan(env, body);
           case "/progress":
             return await handleProgress(env, body);
+          case "/speak":
+            return await handleSpeak(env, body);
         }
       }
 
