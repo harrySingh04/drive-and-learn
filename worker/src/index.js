@@ -9,7 +9,7 @@ const CORS = {
 };
 
 const EMBED_MODEL = "text-embedding-3-small";
-const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts";
 
 // Podcast host names — must match the speaker labels the model is told to use.
